@@ -74,23 +74,26 @@ class Jeb4frida(IScript):
         frida_hook = "    var {} = Java.use('{}');\n".format(class_name_var, class_name)
 
         for idx, java_method in enumerate(java_methods):
-            method_name = java_method.getName()
+            method_name = java_method.getName().strip('<>')
             method_name_var = "{}_{}_{:x}".format(class_name_var, method_name, idx)
+            method_name = '$init' if method_name == "init" else method_name
 
             method_parameters = java_method.getParameters()
             if len(method_parameters) > 0 and method_parameters[0].getIdentifier().toString() == "this":  # pop "this"
                 method_parameters = method_parameters[1:]
             method_arguments = [m.getIdentifier().toString() for m in method_parameters]
-            method_overload_parameters = [p.getType().getSignature().replace('/', '.').replace(';', '') for p in method_parameters]
+            method_overload_parameters = ['"{}"'.format(p.getType().getSignature().replace('/', '.').replace(';', '')) for p in method_parameters]
+
+
             frida_hook += """
     var {method_name_var} = {class_name_var}.{method_name}.overload({method_overload});
     {method_name_var}.implementation = function({method_arguments}) {{
-        console.log(`[+] Hooked {class_name}.{method_name_var}({method_arguments})`);
+        console.log(`[+] Hooked {class_name}.{method_name}({method_arguments})`);
         return {method_name_var}.call(this{hack}{method_arguments});
     }};""".format(
-                    method_name_var=method_name_var,
                     class_name_var=class_name_var,
                     class_name=class_name,
+                    method_name_var=method_name_var,
                     method_name=method_name,
                     method_overload=', '.join(method_overload_parameters),
                     method_arguments=', '.join(method_arguments),
