@@ -77,13 +77,20 @@ class Jeb4frida(IScript):
             method_name = java_method.getName().strip('<>')
             method_name_var = "{}_{}_{:x}".format(class_name_var, method_name, idx)
             method_name = '$init' if method_name == "init" else method_name
-
+            if method_name == "clinit": 
+                print(u"❌ Encountered <clinit>, skipping...\n\tPS: Send PR if you know how to fix this.")
+                continue
             method_parameters = java_method.getParameters()
             if len(method_parameters) > 0 and method_parameters[0].getIdentifier().toString() == "this":  # pop "this"
                 method_parameters = method_parameters[1:]
             method_arguments = [m.getIdentifier().toString() for m in method_parameters]
-            method_overload_parameters = ['"{}"'.format(p.getType().getSignature().replace('/', '.').replace(';', '')) for p in method_parameters]
+            method_overload_parameters = []
 
+            for p in method_parameters:
+                signature = p.getType().getSignature().replace('/', '.')
+                if not signature.startswith('['):
+                    signature = re.sub(r'L((?:[^.]+\.)*[^.]+);', r'\1', signature)
+                method_overload_parameters.append('"{}"'.format(signature))
 
             frida_hook += """
     var {method_name_var} = {class_name_var}.{method_name}.overload({method_overload});
@@ -102,14 +109,4 @@ class Jeb4frida(IScript):
         print('FRIDA HOOOOOK!!!')
         print('0' * 100)
         print(frida_hook)
-            # print("-------------")
-            # for p in method_parameters:
-            #     print(p.getType().getSignature().replace('/', '.').replace(';', ''))
-            # print("-------------")
-            # print(java_method)
-            # print(java_method.getName())
-            # print(method_name_var)
-            # print(method_parameters)
-            # print(method_arguments)
-            
-        
+           
