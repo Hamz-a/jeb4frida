@@ -2,7 +2,7 @@
 from com.pnfsoftware.jeb.client.api import IScript, IGraphicalClientContext
 from com.pnfsoftware.jeb.core import Artifact
 from com.pnfsoftware.jeb.core.input import FileInput
-from com.pnfsoftware.jeb.core.units.code.android import IDexUnit
+from com.pnfsoftware.jeb.core.units.code.android import IDexUnit, IApkUnit
 from com.pnfsoftware.jeb.core.units.code.android.dex import DexPoolType
 from com.pnfsoftware.jeb.core.units.code.java import IJavaSourceUnit, IJavaMethod
 from com.pnfsoftware.jeb.core.units import INativeCodeUnit
@@ -66,8 +66,12 @@ class Jeb4frida(IScript):
         else: # all methods                
             java_methods = java_class.getMethods()
         
-        self.gen_java_hook(java_class, java_methods)
+        print(u"🔥 Here\'s a fresh Frida hook...")
+        print('-' * 100)
+        print(self.gen_how_to(ctx))
+        print(self.gen_java_hook(java_class, java_methods))
     
+
     def gen_java_hook(self, java_class, java_methods):
         class_name = java_class.getType().toString()
         class_name_var = class_name.split('.')[-1]
@@ -78,7 +82,7 @@ class Jeb4frida(IScript):
             method_name_var = "{}_{}_{:x}".format(class_name_var, method_name, idx)
             method_name = '$init' if method_name == "init" else method_name
             if method_name == "clinit": 
-                print(u"❌ Encountered <clinit>, skipping...\n\tPS: Send PR if you know how to fix this.")
+                print(u"//❌ Encountered <clinit>, skipping...\n//\tPS: Send PR if you know how to fix this.")
                 continue
             method_parameters = java_method.getParameters()
             if len(method_parameters) > 0 and method_parameters[0].getIdentifier().toString() == "this":  # pop "this"
@@ -98,15 +102,24 @@ class Jeb4frida(IScript):
         console.log(`[+] Hooked {class_name}.{method_name}({method_arguments})`);
         return {method_name_var}.call(this{hack}{method_arguments});
     }};""".format(
-                    class_name_var=class_name_var,
-                    class_name=class_name,
-                    method_name_var=method_name_var,
-                    method_name=method_name,
-                    method_overload=', '.join(method_overload_parameters),
-                    method_arguments=', '.join(method_arguments),
-                    hack=', ' if len(method_arguments) > 0 else '')
+                class_name_var=class_name_var,
+                class_name=class_name,
+                method_name_var=method_name_var,
+                method_name=method_name,
+                method_overload=', '.join(method_overload_parameters),
+                method_arguments=', '.join(method_arguments),
+                hack=', ' if len(method_arguments) > 0 else '')
 
-        print('FRIDA HOOOOOK!!!')
-        print('0' * 100)
-        print(frida_hook)
-           
+        return "Java.perform(function() {{\n{}\n}});".format(frida_hook)
+    
+
+    def gen_how_to(self, ctx):
+        project = ctx.getMainProject()
+        assert project, "Need a project..."
+
+        # Find the first IApkUnit in the project
+        apk = project.findUnit(IApkUnit)
+        assert apk, "Need an apk unit"
+
+        return "// Usage: frida -U -f {} -l hook.js --no-pause".format(apk.getPackageName())
+
