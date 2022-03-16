@@ -7,7 +7,10 @@ from com.pnfsoftware.jeb.core.units.code.android.dex import DexPoolType
 from com.pnfsoftware.jeb.core.units.code.java import IJavaSourceUnit, IJavaMethod
 from com.pnfsoftware.jeb.core.units import INativeCodeUnit
 from com.pnfsoftware.jeb.core.units.code.asm.decompiler import INativeSourceUnit
-
+from com.pnfsoftware.jeb.core.units import UnitUtil
+from java.awt.datatransfer import StringSelection
+from java.awt.datatransfer import Clipboard
+from java.awt import Toolkit
 
 from java.io import File
 import re
@@ -34,14 +37,9 @@ class Jeb4frida(IScript):
             return
             
 
-        if isinstance(unit, INativeSourceUnit):
-            # decompiled native code
-            print(u"❌ INativeSourceUnit is not implemented yet...")
-            return
-        
-        if isinstance(unit, INativeCodeUnit):
-            # assembly native code
-            print(u"❌ INativeCodeUnit is not implemented yet...")
+        if isinstance(unit, INativeSourceUnit) or isinstance(unit, INativeCodeUnit):
+            print(u"INativeSourceUnit / INativeCodeUnit detected...")
+            self.handle_native(ctx, unit)
             return
             
         return 
@@ -113,6 +111,60 @@ class Jeb4frida(IScript):
         return "Java.perform(function() {{\n{}\n}});".format(frida_hook)
     
 
+    def handle_native(self, ctx, unit):
+        f = ctx.getFocusedFragment()
+        assert f, 'Need a focused fragment'
+        active_address = f.getActiveAddress()
+        assert active_address, 'Put cursor somewhere else...'
+        active_address = active_address.split('+')[0]  # strip offset
+
+        decompiler = unit.getDecompiler()
+        code_unit = decompiler.getCodeUnit()  # ICodeUnit
+        elf = code_unit.getCodeObjectContainer()  # ICodeObjectUnit 
+
+        lib_name = elf.getName()
+
+        code_method = code_unit.getMethod(active_address) # ICodeMethod -> INativeMethodItem
+        method_real_name = code_method.getName(False)  # we need the real name instead of renamed one
+        func_offset = hex(code_method.getMemoryAddress()).rstrip("L")
+        
+        func_retval_type = code_method.getReturnType().getName(True) if code_method.getReturnType() is not None else "undefined"
+        func_parameter_names = code_method.getParameterNames()
+        func_parameter_types = code_method.getParameterTypes()
+        func_args = ""
+        for idx, func_parameter_name in enumerate(func_parameter_names):
+            func_args += "this.{} = args[{}]; // {}\n        ".format(func_parameter_name, idx, func_parameter_types[idx].getName())
+        if method_real_name.startswith("Java_"):
+            print("Java native method detected...")
+            native_pointer = "Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
+        elif method_real_name.startswith(u"→"):
+            print("Trampoline detected...")
+            native_pointer = "Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name.lstrip(u"→"))
+        elif re.match(r'sub_[A-F0-9]+', method_real_name):
+            print("Need to calculate offset...")
+            native_pointer = "Module.findBaseAddress('{lib_name}').add({func_offset})".format(lib_name=lib_name, func_offset=func_offset)
+        else:
+            print("Everything else...")
+            native_pointer = "Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
+
+
+        frida_hook = u"""
+Interceptor.attach({native_pointer}, {{ // offset {func_offset}
+    onEnter(args) {{
+        {func_args}
+    }}, onLeave(retval) {{ // return type: {func_retval_type}
+        console.log(`[+] Hooked {lib_name}[{func_name}]({func_params}) -> ${{retval}}`);
+        // retval.replace(0x0)
+    }}
+}});""".format(lib_name=lib_name, func_name=method_real_name, native_pointer=native_pointer,
+        func_offset=func_offset, func_retval_type=func_retval_type, func_args=func_args,
+        func_params=', '.join(func_parameter_names))
+
+        print(u"🔥 Here\'s a fresh Frida hook...")
+        print('-' * 100)
+        print(self.gen_how_to(ctx))
+        print(frida_hook)
+
     def gen_how_to(self, ctx):
         project = ctx.getMainProject()
         assert project, "Need a project..."
@@ -122,4 +174,3 @@ class Jeb4frida(IScript):
         assert apk, "Need an apk unit"
 
         return "// Usage: frida -U -f {} -l hook.js --no-pause".format(apk.getPackageName())
-
