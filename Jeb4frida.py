@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #?description=Helper JEB script to generate Frida hooks
 #?shortcut=
+
 from com.pnfsoftware.jeb.client.api import IScript, IGraphicalClientContext
 from com.pnfsoftware.jeb.core import Artifact
 from com.pnfsoftware.jeb.core.input import FileInput
@@ -128,14 +129,15 @@ class Jeb4frida(IScript):
 
         code_method = code_unit.getMethod(active_address) # ICodeMethod -> INativeMethodItem
         method_real_name = code_method.getName(False)  # we need the real name instead of renamed one
-        func_offset = hex(code_method.getMemoryAddress()).rstrip("L")
+        func_offset = hex(code_method.getMemoryAddress() - code_unit.getVirtualImageBase()).rstrip("L")
+        
         
         func_retval_type = code_method.getReturnType().getName(True) if code_method.getReturnType() is not None else "undefined"
         func_parameter_names = code_method.getParameterNames()
         func_parameter_types = code_method.getParameterTypes()
         func_args = ""
         for idx, func_parameter_name in enumerate(func_parameter_names):
-            func_args += "this.{} = args[{}]; // {}\n        ".format(func_parameter_name, idx, func_parameter_types[idx].getName())
+            func_args += "this.{} = args[{}]; // {}\n                ".format(func_parameter_name, idx, func_parameter_types[idx].getName())
         if method_real_name.startswith("Java_"):
             print("Java native method detected...")
             native_pointer = "Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
@@ -151,14 +153,22 @@ class Jeb4frida(IScript):
 
 
         frida_hook = u"""
-Interceptor.attach({native_pointer}, {{ // offset {func_offset}
-    onEnter(args) {{
-        {func_args}
-    }}, onLeave(retval) {{ // return type: {func_retval_type}
-        console.log(`[+] Hooked {lib_name}[{func_name}]({func_params}) -> ${{retval}}`);
-        // retval.replace(0x0)
+var interval = setInterval(function() {{
+    if (Module.findBaseAddress("{lib_name}")) {{
+        clearInterval(interval);
+
+        Interceptor.attach({native_pointer}, {{ // offset {func_offset}
+            onEnter(args) {{
+                {func_args}
+            }}, onLeave(retval) {{ // return type: {func_retval_type}
+                console.log(`[+] Hooked {lib_name}[{func_name}]({func_params}) -> ${{retval}}`);
+                // retval.replace(0x0)
+            }}
+        }});
+
+        return;
     }}
-}});""".format(lib_name=lib_name, func_name=method_real_name, native_pointer=native_pointer,
+}}, 0);""".format(lib_name=lib_name, func_name=method_real_name, native_pointer=native_pointer,
         func_offset=func_offset, func_retval_type=func_retval_type, func_args=func_args,
         func_params=', '.join(func_parameter_names))
 
