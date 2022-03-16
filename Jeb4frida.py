@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+#?description=Helper JEB script to generate Frida hooks
+#?shortcut=
 from com.pnfsoftware.jeb.client.api import IScript, IGraphicalClientContext
 from com.pnfsoftware.jeb.core import Artifact
 from com.pnfsoftware.jeb.core.input import FileInput
