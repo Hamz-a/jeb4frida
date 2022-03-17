@@ -76,11 +76,11 @@ class Jeb4frida(IScript):
     def gen_java_hook(self, java_class, java_methods):
         class_name = java_class.getType().toString()
         class_name_var = class_name.split('.')[-1]
-        frida_hook = "    var {} = Java.use('{}');\n".format(class_name_var, class_name)
+        frida_hook = u"    var {} = Java.use('{}');\n".format(class_name_var, class_name)
 
         for idx, java_method in enumerate(java_methods):
             method_name = java_method.getName().strip('<>')
-            method_name_var = "{}_{}_{:x}".format(class_name_var, method_name, idx)
+            method_name_var = u"{}_{}_{:x}".format(class_name_var, method_name, idx)
             method_name = '$init' if method_name == "init" else method_name
             if method_name == "clinit": 
                 print(u"//❌ Encountered <clinit>, skipping...\n//\tPS: Send PR if you know how to fix this.")
@@ -95,9 +95,9 @@ class Jeb4frida(IScript):
                 signature = p.getType().getSignature().replace('/', '.')
                 if not signature.startswith('['):
                     signature = re.sub(r'L((?:[^.]+\.)*[^.]+);', r'\1', signature)
-                method_overload_parameters.append('"{}"'.format(signature))
+                method_overload_parameters.append(u'"{}"'.format(signature))
 
-            frida_hook += """
+            frida_hook += u"""
     var {method_name_var} = {class_name_var}.{method_name}.overload({method_overload});
     {method_name_var}.implementation = function({method_arguments}) {{
         console.log(`[+] Hooked {class_name}.{method_name}({method_arguments})`);
@@ -111,7 +111,7 @@ class Jeb4frida(IScript):
                 method_arguments=', '.join(method_arguments),
                 hack=', ' if len(method_arguments) > 0 else '')
 
-        return "Java.perform(function() {{\n{}\n}});".format(frida_hook)
+        return u"Java.perform(function() {{\n{}\n}});".format(frida_hook)
     
 
     def handle_native(self, ctx, unit):
@@ -135,21 +135,21 @@ class Jeb4frida(IScript):
         func_retval_type = code_method.getReturnType().getName(True) if code_method.getReturnType() is not None else "undefined"
         func_parameter_names = code_method.getParameterNames()
         func_parameter_types = code_method.getParameterTypes()
-        func_args = ""
+        func_args = u""
         for idx, func_parameter_name in enumerate(func_parameter_names):
-            func_args += "this.{} = args[{}]; // {}\n                ".format(func_parameter_name, idx, func_parameter_types[idx].getName())
+            func_args += u"this.{} = args[{}]; // {}\n                ".format(func_parameter_name, idx, func_parameter_types[idx].getName())
         if method_real_name.startswith("Java_"):
             print("Java native method detected...")
-            native_pointer = "Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
+            native_pointer = u"Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
         elif method_real_name.startswith(u"→"):
             print("Trampoline detected...")
-            native_pointer = "Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name.lstrip(u"→"))
+            native_pointer = u"Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name.lstrip(u"→"))
         elif re.match(r'sub_[A-F0-9]+', method_real_name):
             print("Need to calculate offset...")
-            native_pointer = "Module.findBaseAddress('{lib_name}').add({func_offset})".format(lib_name=lib_name, func_offset=func_offset)
+            native_pointer = u"Module.findBaseAddress('{lib_name}').add({func_offset})".format(lib_name=lib_name, func_offset=func_offset)
         else:
             print("Everything else...")
-            native_pointer = "Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
+            native_pointer = u"Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
 
 
         frida_hook = u"""
@@ -185,4 +185,4 @@ var interval = setInterval(function() {{
         apk = project.findUnit(IApkUnit)
         assert apk, "Need an apk unit"
 
-        return "// Usage: frida -U -f {} -l hook.js --no-pause".format(apk.getPackageName())
+        return u"// Usage: frida -U -f {} -l hook.js --no-pause".format(apk.getPackageName())
