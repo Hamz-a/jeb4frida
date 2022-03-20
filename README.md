@@ -13,7 +13,23 @@ Generate Frida hooks directly from JEB!
 
 ## TODO
 - `<clinit>` calls are currently not hooked. If you know how to do this, send PR.
+- Fix obfuscated names that make use of "weird" unicode characters.
 
 
 ## Naming
 Some time ago, [jeb2frida](https://github.com/Hamz-a/jeb2frida) was released. Since that name was already taken and jeb3frida does not make much sense either, jeb4frida was chosen!
+
+
+## Preview
+
+1. Select target
+
+![target selection](preview/jeb4frida_select_class.png)
+
+2. Use script to generate hook
+
+![generated hook](preview/jeb4frida_generated_hook.png)
+
+3. Native functions are also supported
+
+![native hook](preview/jeb4frida_native.png)
