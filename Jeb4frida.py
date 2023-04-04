@@ -72,7 +72,25 @@ class Jeb4frida(IScript):
         print(self.gen_how_to(ctx))
         print(self.gen_java_hook(java_class, java_methods))
     
+    def to_canonical_name(self, dalvik_name):
+        dalvik_name = dalvik_name.replace('/', '.')
 
+        type_name = {
+            'C': "char",
+            'I': "int",
+            'B': "byte",
+            'Z': "boolean",
+            'F': "float",
+            'D': "double",
+            'S': "short",
+            'J': "long",
+            'V': "void",
+            'L': dalvik_name[1:-1],
+            '[': dalvik_name
+        }
+
+        return type_name[dalvik_name[0]]
+    
     def gen_java_hook(self, java_class, java_methods):
         class_name = java_class.getType().toString()
         class_name_var = class_name.split('.')[-1]
@@ -92,11 +110,8 @@ class Jeb4frida(IScript):
             method_overload_parameters = []
 
             for p in method_parameters:
-                signature = p.getType().getSignature().replace('/', '.')
-                if not signature.startswith('['):
-                    signature = re.sub(r'L((?:[^.]+\.)*[^.]+);', r'\1', signature)
-                method_overload_parameters.append(u'"{}"'.format(signature))
-
+                method_overload_parameters.append(u'"{}"'.format(self.to_canonical_name(p.getType().getSignature())))
+               
             frida_hook += u"""
     var {method_name_var} = {class_name_var}.{method_name}.overload({method_overload});
     {method_name_var}.implementation = function({method_arguments}) {{
