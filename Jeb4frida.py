@@ -155,21 +155,22 @@ class Jeb4frida(IScript):
             func_args += u"this.{} = args[{}]; // {}\n                ".format(func_parameter_name, idx, func_parameter_types[idx].getName())
         if method_real_name.startswith("Java_"):
             print("Java native method detected...")
-            native_pointer = u"Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
+            native_pointer = u"Process.getModuleByName('{lib_name}').getExportByName('{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
         elif method_real_name.startswith(u"→"):
             print("Trampoline detected...")
-            native_pointer = u"Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name.lstrip(u"→"))
+            native_pointer = u"Process.getModuleByName('{lib_name}').getExportByName('{func_name}')".format(lib_name=lib_name, func_name=method_real_name.lstrip(u"→"))
         elif re.match(r'sub_[A-F0-9]+', method_real_name):
             print("Need to calculate offset...")
-            native_pointer = u"Module.findBaseAddress('{lib_name}').add({func_offset})".format(lib_name=lib_name, func_offset=func_offset)
+            native_pointer = u"Process.getModuleByName('{lib_name}').base.add({func_offset})".format(lib_name=lib_name, func_offset=func_offset)
         else:
             print("Everything else...")
-            native_pointer = u"Module.getExportByName('{lib_name}', '{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
+            native_pointer = u"Process.getModuleByName('{lib_name}').getExportByName('{func_name}')".format(lib_name=lib_name, func_name=method_real_name)
 
 
         frida_hook = u"""
 var interval = setInterval(function() {{
-    if (Module.findBaseAddress("{lib_name}")) {{
+    var _m = Process.findModuleByName("{lib_name}");
+    if (_m && _m.base) {{
         clearInterval(interval);
 
         Interceptor.attach({native_pointer}, {{ // offset {func_offset}
